@@ -10,27 +10,27 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_ARCHITECTURES 75)
 
 add_executable(hipvision
     src/main.cpp
     src/cpu/grayscale.cpp
+    src/cuda/grayscale.cu
 )
 
-add_executable(grayscale_test
-    src/cuda/grayscale_test.cu
-)
-
-target_include_directories(hipvision
-    PRIVATE
+target_include_directories(hipvision PRIVATE
     ${PROJECT_SOURCE_DIR}/include
 )
 
+# Compiler warnings for C++
 if(MSVC)
-    target_compile_options(hipvision PRIVATE /W4)
+    target_compile_options(hipvision PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:/W4>
+    )
 else()
     target_compile_options(hipvision PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
+        $<$<COMPILE_LANGUAGE:CXX>:-Wall>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wextra>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wpedantic>
     )
 endif()
