@@ -24,7 +24,7 @@ Image grayscaleCPU(const Image& input)
         const uint8_t g = src[rgbIdx + 1];
         const uint8_t b = src[rgbIdx + 2];
 
-        const uint8_t gray = static_cast<uint8_t>(299u * r + 587u * g + 114u * b) / 1000u;
+        const uint8_t gray = static_cast<uint8_t>((299u * r + 587u * g + 114u * b) / 1000u);
 
         dst[i] = gray;
     }
