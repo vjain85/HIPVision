@@ -74,18 +74,38 @@ Image CudaGrayscale::process(const Image& input)
 
     try
     {
-        CUDA_CHECK(cudaMemcpy(d_input, input.pixels(), inputSize, cudaMemcpyHostToDevice));
+        cudaEvent_t start, stop;
+        CUDA_CHECK(cudaEventCreate(&start));
+        CUDA_CHECK(cudaEventCreate(&stop));
 
+        //1. Host to Device copy
+        CUDA_CHECK(cudaEventRecord(start));
+        CUDA_CHECK(cudaMemcpy(d_input, input.pixels(), inputSize, cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaEventRecord(stop));
+        CUDA_CHECK(cudaEventSynchronize(stop));
+        CUDA_CHECK(cudaEventElapsedTime(&h2dTimeMs, start, stop));
+
+        //2. Kernel execution
         constexpr int threadsPerBlock = 256;
         const int blocksPerGrid = static_cast<int>((pixelCount + threadsPerBlock - 1) / threadsPerBlock);
-
+        CUDA_CHECK(cudaEventRecord(start));
         grayscaleKernelReusable<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, pixelCount);
         CUDA_CHECK(cudaGetLastError());
-        CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_CHECK(cudaEventRecord(stop));
+        CUDA_CHECK(cudaEventSynchronize(stop));
+        CUDA_CHECK(cudaEventElapsedTime(&kernelTimeMs, start, stop));
 
+        //3. Device to Host copy
+        CUDA_CHECK(cudaEventRecord(start));
         CUDA_CHECK(cudaMemcpy(output.pixels(), d_output, outputSize, cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaEventRecord(stop));
+        CUDA_CHECK(cudaEventSynchronize(stop));
+        CUDA_CHECK(cudaEventElapsedTime(&d2hTimeMs, start, stop));
+
+        CUDA_CHECK(cudaEventDestroy(start));
+        CUDA_CHECK(cudaEventDestroy(stop));
     }
-    catch (const std::exception& e)
+    catch(const std::exception& e)
     {
         throw std::runtime_error(std::string("CUDA processing failed: ") + e.what());
     }

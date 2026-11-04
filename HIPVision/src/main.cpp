@@ -60,7 +60,7 @@ int main()
     constexpr int WIDTH = 4096;
     constexpr int HEIGHT = 4096;
 
-    std::cout << "HIPVision - Day 2\n";
+    std::cout << "HIPVision - Day 5\n";
 
     Image input(WIDTH, HEIGHT, 3);
 
@@ -93,6 +93,14 @@ int main()
     double cudaAverage = benchmark([&]() { 
         cudaOutput = cudaProcessor.process(input);
     }, iterations);
+
+    std::cout << "\nCUDA Transfer breakdown:\n";
+
+    std::cout << "Host to Device time: " << cudaProcessor.getH2DTimeMs() << " ms\n";
+    std::cout << "Kernel execution time: "<< cudaProcessor.getKernelTimeMs() << " ms\n";
+    std::cout << "Device to Host time: "<< cudaProcessor.getD2HTimeMs() << " ms\n";
+
+    std::cout << "Sum of GPU stages: " << (cudaProcessor.getH2DTimeMs() + cudaProcessor.getKernelTimeMs() + cudaProcessor.getD2HTimeMs()) << " ms\n";
 
     std::cout << "\nCorrectness: "<< (cpuOutput.data == cudaOutput.data ? "PASS" : "FAIL") << '\n';
 
