@@ -8,6 +8,7 @@
 #include "backend.hpp"
 #include "cuda_grayscale.hpp"
 #include "cuda_grayscale_pinned.hpp"
+#include "cuda_grayscale_direct.hpp"
 
 using Clock = std::chrono::steady_clock;
 
@@ -24,6 +25,14 @@ bool compareImages(const Image& img1, const Image& img2)
         return false;
 
     return std::equal(img1.data.begin(), img1.data.end(), img2.data.begin());
+}
+
+bool compareImages(const PinnedImage& img1, const Image& img2)
+{
+    if (img1.width != img2.width || img1.height != img2.height || img1.channels != img2.channels)
+        return false;
+
+    return std::equal(img1.pixels(), img1.pixels() + img1.sizeInBytes(), img2.pixels());
 }
 
 template<typename Function>
@@ -61,7 +70,7 @@ int main()
     constexpr int WIDTH = 4096;
     constexpr int HEIGHT = 4096;
 
-    std::cout << "HIPVision - Day 6\n";
+    std::cout << "HIPVision - Day 7\n";
 
     Image input(WIDTH, HEIGHT, 3);
 
@@ -119,22 +128,43 @@ int main()
     std::cout << "Input copy time (host to pinned): " << cudaPinnedProcessor.getInputCopyTimeMs() << " ms\n";
     std::cout << "Output copy time (pinned to host): " << cudaPinnedProcessor.getOutputCopyTimeMs() << " ms\n";
 
+    // 4. CUDA direct pinned memory benchmark
+    CudaGrayscaleDirect cudaDirectProcessor(input.pixelCount());
+    PinnedImage cudaDirectInput(WIDTH, HEIGHT, 3);
+    PinnedImage cudaDirectOutput(WIDTH, HEIGHT, 1);
+
+    std::copy(input.data.begin(), input.data.end(), cudaDirectInput.pixels());
+
+    std::cout << "\nCUDA direct pinned memory Benchmark (" << iterations << " iterations)\n";
+
+    double cudaDirectAverage = benchmark([&]() { 
+        cudaDirectOutput = cudaDirectProcessor.process(cudaDirectInput);
+    }, iterations);
+
+    std::cout << "\nDirect Pinned CUDA Transfer breakdown:\n";
+    std::cout << "Host to Device time: " << cudaDirectProcessor.getH2DTimeMs() << " ms\n";
+    std::cout << "Kernel execution time: "<< cudaDirectProcessor.getKernelTimeMs() << " ms\n";
+    std::cout << "Device to Host time: "<< cudaDirectProcessor.getD2HTimeMs() << " ms\n";
+
     // 4. correctness check
     std::cout << "\nCorrectness:\n";
 
     std::cout << "CPU vs CUDA pageable memory: " << (compareImages(cpuOutput, cudaOutput) ? "Match" : "Mismatch") << std::endl;
     std::cout << "CPU vs CUDA pinned memory: " << (compareImages(cpuOutput, cudaPinnedOutput) ? "Match" : "Mismatch") << std::endl;
+    std::cout << "CPU vs CUDA direct pinned memory: " << (compareImages(cudaDirectOutput, cpuOutput) ? "Match" : "Mismatch") << std::endl;
 
     // 5. Performance comparison
-    std::cout << "\nPerformance summary:\n";
+    std::cout << "\n=========Performance summary==========:\n";
 
     std::cout << "Average CPU time: " << cpuAverage << " ms\n";
     std::cout << "Average CUDA pageable memory time: "<< cudaAverage << " ms\n";
     std::cout << "Average CUDA pinned memory time: "<< cudaPinnedAverage << " ms\n";
+    std::cout << "Average CUDA direct pinned memory time: "<< cudaDirectAverage << " ms\n";
 
     std::cout << "Speedup (CPU vs CUDA pageable memory): "<< cpuAverage / cudaAverage << "x\n";
     std::cout << "Speedup (CPU vs CUDA pinned memory): "<< cpuAverage / cudaPinnedAverage << "x\n";
     std::cout << "Speedup (CUDA pageable memory vs CUDA pinned memory): "<< cudaAverage / cudaPinnedAverage << "x\n";
+    std::cout << "Speedup (CPU vs CUDA direct pinned memory): "<< cpuAverage / cudaDirectAverage << "x\n";
 
     return 0;
 }
