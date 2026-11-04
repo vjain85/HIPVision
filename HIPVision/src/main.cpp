@@ -7,6 +7,7 @@
 #include <iomanip>
 #include "backend.hpp"
 #include "cuda_grayscale.hpp"
+#include "cuda_grayscale_pinned.hpp"
 
 using Clock = std::chrono::steady_clock;
 
@@ -60,7 +61,7 @@ int main()
     constexpr int WIDTH = 4096;
     constexpr int HEIGHT = 4096;
 
-    std::cout << "HIPVision - Day 5\n";
+    std::cout << "HIPVision - Day 6\n";
 
     Image input(WIDTH, HEIGHT, 3);
 
@@ -75,7 +76,7 @@ int main()
         
     constexpr int iterations = 10;
         
-    // CPU benchmark
+    // 1. CPU benchmark
     Image cpuOutput(WIDTH, HEIGHT, 1);
     std::cout << "\nCPU Benchmark (" << iterations << " iterations)\n";
 
@@ -84,30 +85,56 @@ int main()
     }, iterations);
 
     
-    // CUDA benchmark
+    // 2. CUDA pageable memory benchmark
     CudaGrayscale cudaProcessor(input.pixelCount());
 
     Image cudaOutput(WIDTH, HEIGHT, 1);
-    std::cout << "\nCUDA reusable memory Benchmark (" << iterations << " iterations)\n";
+    std::cout << "\nCUDA pageable memory Benchmark (" << iterations << " iterations)\n";
 
     double cudaAverage = benchmark([&]() { 
         cudaOutput = cudaProcessor.process(input);
     }, iterations);
 
-    std::cout << "\nCUDA Transfer breakdown:\n";
+    std::cout << "\nPageable CUDA Transfer breakdown:\n";
 
     std::cout << "Host to Device time: " << cudaProcessor.getH2DTimeMs() << " ms\n";
     std::cout << "Kernel execution time: "<< cudaProcessor.getKernelTimeMs() << " ms\n";
     std::cout << "Device to Host time: "<< cudaProcessor.getD2HTimeMs() << " ms\n";
 
-    std::cout << "Sum of GPU stages: " << (cudaProcessor.getH2DTimeMs() + cudaProcessor.getKernelTimeMs() + cudaProcessor.getD2HTimeMs()) << " ms\n";
+    // 3. CUDA pinned memory benchmark
+    CudaGrayscalePinned cudaPinnedProcessor(input.pixelCount());
 
-    std::cout << "\nCorrectness: "<< (cpuOutput.data == cudaOutput.data ? "PASS" : "FAIL") << '\n';
+    Image cudaPinnedOutput(WIDTH, HEIGHT, 1);
+    std::cout << "\nCUDA pinned memory Benchmark (" << iterations << " iterations)\n";
 
-    std::cout << "\nAverage CPU time: " << cpuAverage << " ms\n";
-    std::cout << "Average CUDA end-to-end time: "<< cudaAverage << " ms\n";
+    double cudaPinnedAverage = benchmark([&]() { 
+        cudaPinnedOutput = cudaPinnedProcessor.process(input);
+    }, iterations);
+    
+    std::cout << "\nPinned CUDA Transfer breakdown:\n";
+    std::cout << "Host to Device time: " << cudaPinnedProcessor.getH2DTimeMs() << " ms\n";
+    std::cout << "Kernel execution time: "<< cudaPinnedProcessor.getKernelTimeMs() << " ms\n";
+    std::cout << "Device to Host time: "<< cudaPinnedProcessor.getD2HTimeMs() << " ms\n";
 
-    std::cout << "End-to-end speedup: "<< cpuAverage / cudaAverage << "x\n";
+    std::cout << "Input copy time (host to pinned): " << cudaPinnedProcessor.getInputCopyTimeMs() << " ms\n";
+    std::cout << "Output copy time (pinned to host): " << cudaPinnedProcessor.getOutputCopyTimeMs() << " ms\n";
+
+    // 4. correctness check
+    std::cout << "\nCorrectness:\n";
+
+    std::cout << "CPU vs CUDA pageable memory: " << (compareImages(cpuOutput, cudaOutput) ? "Match" : "Mismatch") << std::endl;
+    std::cout << "CPU vs CUDA pinned memory: " << (compareImages(cpuOutput, cudaPinnedOutput) ? "Match" : "Mismatch") << std::endl;
+
+    // 5. Performance comparison
+    std::cout << "\nPerformance summary:\n";
+
+    std::cout << "Average CPU time: " << cpuAverage << " ms\n";
+    std::cout << "Average CUDA pageable memory time: "<< cudaAverage << " ms\n";
+    std::cout << "Average CUDA pinned memory time: "<< cudaPinnedAverage << " ms\n";
+
+    std::cout << "Speedup (CPU vs CUDA pageable memory): "<< cpuAverage / cudaAverage << "x\n";
+    std::cout << "Speedup (CPU vs CUDA pinned memory): "<< cpuAverage / cudaPinnedAverage << "x\n";
+    std::cout << "Speedup (CUDA pageable memory vs CUDA pinned memory): "<< cudaAverage / cudaPinnedAverage << "x\n";
 
     return 0;
 }
