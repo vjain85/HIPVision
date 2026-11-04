@@ -6,6 +6,7 @@
 #include <numeric>
 #include <iomanip>
 #include "backend.hpp"
+#include "cuda_grayscale.hpp"
 
 using Clock = std::chrono::steady_clock;
 
@@ -70,9 +71,9 @@ int main()
     for(auto& pixel : input.data)
         pixel = static_cast<uint8_t>(dist(rng));
 
-        std::cout << "Image: " << WIDTH << "x" << HEIGHT << std::endl;
+    std::cout << "Image: " << WIDTH << "x" << HEIGHT << std::endl;
         
-        constexpr int iterations = 10;
+    constexpr int iterations = 10;
         
     // CPU benchmark
     Image cpuOutput(WIDTH, HEIGHT, 1);
@@ -84,13 +85,14 @@ int main()
 
     
     // CUDA benchmark
+    CudaGrayscale cudaProcessor(input.pixelCount());
+
     Image cudaOutput(WIDTH, HEIGHT, 1);
-    std::cout << "\nCUDA Benchmark (" << iterations << " iterations)\n";
+    std::cout << "\nCUDA reusable memory Benchmark (" << iterations << " iterations)\n";
 
     double cudaAverage = benchmark([&]() { 
-        cudaOutput = grayscaleCUDA(input);
+        cudaOutput = cudaProcessor.process(input);
     }, iterations);
-
 
     std::cout << "\nCorrectness: "<< (cpuOutput.data == cudaOutput.data ? "PASS" : "FAIL") << '\n';
 

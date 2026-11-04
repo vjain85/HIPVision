@@ -15,7 +15,7 @@ set(CMAKE_CUDA_ARCHITECTURES 75)
 add_executable(hipvision
     src/main.cpp
     src/cpu/grayscale.cpp
-    src/cuda/grayscale.cu
+    src/cuda/cuda_grayscale.cu
 )
 
 target_include_directories(hipvision PRIVATE
