@@ -85,11 +85,16 @@ CudaGrayscaleDirect::~CudaGrayscaleDirect()
     if (d_output) cudaFree(d_output);
 }
 
-PinnedImage CudaGrayscaleDirect::process(const PinnedImage& input)
+void CudaGrayscaleDirect::process(const PinnedImage& input, PinnedImage& output)
 {
     if (input.channels != 3)
     {
         throw std::invalid_argument("Input image must have 3 channels (RGB).");
+    }
+
+    if (output.channels != 1 || output.width != input.width || output.height != input.height)
+    {
+        throw std::invalid_argument("Output image must have 1 channel (grayscale) and the same dimensions as the input.");
     }
 
     const size_t inputPixelCount = input.pixelCount();
@@ -101,8 +106,6 @@ PinnedImage CudaGrayscaleDirect::process(const PinnedImage& input)
     size_t inputSize = 3 * input.pixelCount() * sizeof(uint8_t);
     size_t outputSize = input.pixelCount() * sizeof(uint8_t);
     
-    PinnedImage output(input.width, input.height, 1);
-
     // Record the start event for H2D transfer
     CUDA_CHECK(cudaEventRecord(h2dStart, stream));
 
@@ -142,5 +145,4 @@ PinnedImage CudaGrayscaleDirect::process(const PinnedImage& input)
     CUDA_CHECK(cudaEventElapsedTime(&kernelTimeMs, kernelStart, kernelStop));
     CUDA_CHECK(cudaEventElapsedTime(&d2hTimeMs, d2hStart, d2hStop));
 
-    return output;
 }

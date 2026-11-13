@@ -15,7 +15,7 @@ public:
     CudaGrayscaleDirect(const CudaGrayscaleDirect&) = delete;
     CudaGrayscaleDirect& operator=(const CudaGrayscaleDirect&) = delete;
 
-    PinnedImage process(const PinnedImage& input);
+    void process(const PinnedImage& input, PinnedImage& output);
 
     float getH2DTimeMs() const { return h2dTimeMs; }
     float getD2HTimeMs() const { return d2hTimeMs; }

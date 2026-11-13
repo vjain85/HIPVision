@@ -9,6 +9,7 @@
 #include "cuda_grayscale.hpp"
 #include "cuda_grayscale_pinned.hpp"
 #include "cuda_grayscale_direct.hpp"
+#include "cuda_grayscale_multistream.hpp"
 
 using Clock = std::chrono::steady_clock;
 
@@ -70,7 +71,7 @@ int main()
     constexpr int WIDTH = 4096;
     constexpr int HEIGHT = 4096;
 
-    std::cout << "HIPVision - Day 7\n";
+    std::cout << "HIPVision - Day 8\n";
 
     Image input(WIDTH, HEIGHT, 3);
 
@@ -138,7 +139,7 @@ int main()
     std::cout << "\nCUDA direct pinned memory Benchmark (" << iterations << " iterations)\n";
 
     double cudaDirectAverage = benchmark([&]() { 
-        cudaDirectOutput = cudaDirectProcessor.process(cudaDirectInput);
+        cudaDirectProcessor.process(cudaDirectInput, cudaDirectOutput);
     }, iterations);
 
     std::cout << "\nDirect Pinned CUDA Transfer breakdown:\n";
@@ -146,25 +147,44 @@ int main()
     std::cout << "Kernel execution time: "<< cudaDirectProcessor.getKernelTimeMs() << " ms\n";
     std::cout << "Device to Host time: "<< cudaDirectProcessor.getD2HTimeMs() << " ms\n";
 
-    // 4. correctness check
+    // 5. CUDA multistream benchmark
+    constexpr size_t chunkPixels = 1024*1024;
+
+    PinnedImage multiInput(WIDTH, HEIGHT, 3);
+    std::copy(input.data.begin(), input.data.end(), multiInput.pixels());
+
+    PinnedImage multiOutput(WIDTH, HEIGHT, 1);
+
+    CudaGrayscaleMultiStream multiProcessor(input.pixelCount(), chunkPixels);
+    std::cout << "\nCUDA multi-streamed benchmark (" << iterations << " iterations)\n";
+
+    double multiAverage = benchmark([&](){
+        multiProcessor.process(multiInput, multiOutput);
+    }, iterations);
+
+    // 6. correctness check
     std::cout << "\nCorrectness:\n";
 
     std::cout << "CPU vs CUDA pageable memory: " << (compareImages(cpuOutput, cudaOutput) ? "Match" : "Mismatch") << std::endl;
     std::cout << "CPU vs CUDA pinned memory: " << (compareImages(cpuOutput, cudaPinnedOutput) ? "Match" : "Mismatch") << std::endl;
     std::cout << "CPU vs CUDA direct pinned memory: " << (compareImages(cudaDirectOutput, cpuOutput) ? "Match" : "Mismatch") << std::endl;
+    std::cout << "CPU vs CUDA multi-stream: " << (compareImages(multiOutput, cpuOutput) ? "Match" : "Mismatch");
 
-    // 5. Performance comparison
+    // 7. Performance comparison
     std::cout << "\n=========Performance summary==========:\n";
 
     std::cout << "Average CPU time: " << cpuAverage << " ms\n";
     std::cout << "Average CUDA pageable memory time: "<< cudaAverage << " ms\n";
     std::cout << "Average CUDA pinned memory time: "<< cudaPinnedAverage << " ms\n";
     std::cout << "Average CUDA direct pinned memory time: "<< cudaDirectAverage << " ms\n";
+    std::cout << "Average Multi-stream CUDA: " << multiAverage << " ms\n";
 
     std::cout << "Speedup (CPU vs CUDA pageable memory): "<< cpuAverage / cudaAverage << "x\n";
     std::cout << "Speedup (CPU vs CUDA pinned memory): "<< cpuAverage / cudaPinnedAverage << "x\n";
     std::cout << "Speedup (CUDA pageable memory vs CUDA pinned memory): "<< cudaAverage / cudaPinnedAverage << "x\n";
     std::cout << "Speedup (CPU vs CUDA direct pinned memory): "<< cpuAverage / cudaDirectAverage << "x\n";
+    std::cout << "Speedup (CPU vs Multi-stream CUDA): " << cpuAverage / multiAverage << "x\n";
+    std::cout << "Speedup (Direct pinned vs Multi-stream): " << cudaDirectAverage/multiAverage << "x\n";
 
     return 0;
 }
