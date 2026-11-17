@@ -10,6 +10,8 @@
 #include "cuda_grayscale_pinned.hpp"
 #include "cuda_grayscale_direct.hpp"
 #include "cuda_grayscale_multistream.hpp"
+#include "cuda_grayscale_grid_stride.hpp"
+#include "cuda_kernel_benchmark.hpp"
 
 using Clock = std::chrono::steady_clock;
 
@@ -71,7 +73,7 @@ int main()
     constexpr int WIDTH = 4096;
     constexpr int HEIGHT = 4096;
 
-    std::cout << "HIPVision - Day 8\n";
+    std::cout << "HIPVision - Day 9\n";
 
     Image input(WIDTH, HEIGHT, 3);
 
@@ -162,15 +164,30 @@ int main()
         multiProcessor.process(multiInput, multiOutput);
     }, iterations);
 
-    // 6. correctness check
+    // 6. CUDA grid stride benchmark
+    CudaGrayscaleGridStride gridStrideProcessor(input.pixelCount());
+
+    Image gridStrideOutput(WIDTH, HEIGHT, 1);
+
+    double gridStrideAverage = benchmark([&]() {
+        gridStrideOutput = gridStrideProcessor.process(input);
+    }, iterations);
+
+    // 7. Cuda kernel-only benchmark
+    CudaKernelBenchmark kernelBenchmark(input.pixelCount());
+    kernelBenchmark.upload(input);
+
+    // 8. correctness check
     std::cout << "\nCorrectness:\n";
 
     std::cout << "CPU vs CUDA pageable memory: " << (compareImages(cpuOutput, cudaOutput) ? "Match" : "Mismatch") << std::endl;
     std::cout << "CPU vs CUDA pinned memory: " << (compareImages(cpuOutput, cudaPinnedOutput) ? "Match" : "Mismatch") << std::endl;
     std::cout << "CPU vs CUDA direct pinned memory: " << (compareImages(cudaDirectOutput, cpuOutput) ? "Match" : "Mismatch") << std::endl;
     std::cout << "CPU vs CUDA multi-stream: " << (compareImages(multiOutput, cpuOutput) ? "Match" : "Mismatch");
+    std::cout << "CPU vs CUDA grid stride:" << (compareImages(gridStrideOutput, cpuOutput) ? "Match" : "Mismatch") << std::endl;
 
-    // 7. Performance comparison
+
+    // 8. Performance comparison
     std::cout << "\n=========Performance summary==========:\n";
 
     std::cout << "Average CPU time: " << cpuAverage << " ms\n";
@@ -178,6 +195,7 @@ int main()
     std::cout << "Average CUDA pinned memory time: "<< cudaPinnedAverage << " ms\n";
     std::cout << "Average CUDA direct pinned memory time: "<< cudaDirectAverage << " ms\n";
     std::cout << "Average Multi-stream CUDA: " << multiAverage << " ms\n";
+    std::cout << "Average grid stride CUDA:" << gridStrideAverage << " ms\n";
 
     std::cout << "Speedup (CPU vs CUDA pageable memory): "<< cpuAverage / cudaAverage << "x\n";
     std::cout << "Speedup (CPU vs CUDA pinned memory): "<< cpuAverage / cudaPinnedAverage << "x\n";
@@ -185,6 +203,19 @@ int main()
     std::cout << "Speedup (CPU vs CUDA direct pinned memory): "<< cpuAverage / cudaDirectAverage << "x\n";
     std::cout << "Speedup (CPU vs Multi-stream CUDA): " << cpuAverage / multiAverage << "x\n";
     std::cout << "Speedup (Direct pinned vs Multi-stream): " << cudaDirectAverage/multiAverage << "x\n";
+    std::cout << "Speedup (CPU vs Grid-stride):" << gridStrideAverage/cpuAverage << "x\n";
+    std::cout << "Speedup (Direct pinned vs Grid-stride):" << gridStrideAverage/cudaDirectAverage << "x\n";
+
+    constexpr int KERNEL_ITERATIONS = 100;
+
+    double onePixelTime = kernelBenchmark.benchmarkOnePixel(KERNEL_ITERATIONS);
+    double grid256Time = kernelBenchmark.benchmarkGridStride(256, KERNEL_ITERATIONS);
+    double grid1024Time = kernelBenchmark.benchmarkGridStride(1024, KERNEL_ITERATIONS);
+
+    std::cout << "\nKernel-Only CUDA Benchmark\n";
+    std::cout << "One pixel per thread: " << onePixelTime << " ms\n";
+    std::cout << "Grid-Stride 256 blocks: " << grid256Time << " ms\n";
+    std::cout << "Grid-Stride 1024 blocks: " << grid1024Time << " ms\n";
 
     return 0;
 }

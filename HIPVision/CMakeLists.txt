@@ -21,6 +21,8 @@ add_executable(hipvision
     src/cuda/cuda_grayscale_pinned.cu
     src/cuda/cuda_grayscale_direct.cu
     src/cuda/cuda_grayscale_multistream.cu
+    src/cuda/cuda_grayscale_grid_stride.cu
+    src/cuda/cuda_kernel_benchmark.cu
 )
 
 target_include_directories(hipvision PRIVATE
